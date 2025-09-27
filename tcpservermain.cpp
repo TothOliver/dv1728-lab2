@@ -22,7 +22,10 @@
 
 using namespace std;
 
+int writeMessage(int sockfd, const char* msg);
+int readMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec);
 int generateTask(char* buffer, size_t bufsize);
+
 
 
 int main(int argc, char *argv[]){
@@ -129,98 +132,27 @@ int main(int argc, char *argv[]){
 
   char tmsg[] = "TEXT TCP 1.1\nBINART TCP 1.1\n";
 
-  ssize_t sent = write(clientfd, tmsg, strlen(tmsg));
-  if(sent == -1){
-    freeaddrinfo(results);
-    close(sockfd);
-    fprintf(stderr, "ERROR: sendto failed\n");
+  if(writeMessage(clientfd, tmsg) == -1)
     return EXIT_FAILURE;
-  }
-  printf("Sent to client:\n%s", tmsg);
-
-  fd_set reading;
-  struct timeval timeout;
-  int rc;
-
+    
   char buf[1500];
   memset(&buf, 0, sizeof(buf));
-  ssize_t byte_size;;
-    
-  FD_ZERO(&reading);
-  FD_SET(clientfd, &reading);
-  memset(&timeout, 0, sizeof(timeout));
-
-  timeout.tv_sec = 10;
-  rc = select(clientfd+1, &reading, NULL, NULL, &timeout);
-
-  if(rc > 0){
-    if(FD_ISSET(clientfd, &reading)){
-      byte_size = read(clientfd, buf, sizeof(buf));
-    }
-  }else if(rc == 0){
-    freeaddrinfo(results);
-    close(sockfd);
-    fprintf(stderr, "ERROR: TIMEOUT\n");
+  if(readMessage(clientfd, buf, sizeof(buf), 5) == -1)
     return EXIT_FAILURE;
-  }else{
-    perror("select");
-  }  
-
-  if(byte_size <= 0){
-    freeaddrinfo(results);
-    close(sockfd);
-    fprintf(stderr, "ERROR: read failed!\n");
-    return EXIT_FAILURE;
-  }
-  printf("Sent from client:\n%s", buf);
-  buf[byte_size] = '\0'; 
 
   if((strcmp(buf, "TEXT TCP 1.1 OK\n") == 0)){
 
     memset(&buf, 0, sizeof(buf));
     int result = generateTask(buf, sizeof(buf));
 
-    sent = write(clientfd, buf, strlen(buf));
-    if(sent == -1){
-      freeaddrinfo(results);
-      close(sockfd);
-      fprintf(stderr, "ERROR: sendto failed\n");
+    if(writeMessage(clientfd, buf) == -1)
       return EXIT_FAILURE;
-    }
-    printf("Sent to client:\n%s", buf);
 
-
-    FD_ZERO(&reading);
-    FD_SET(clientfd, &reading);
-    memset(&timeout, 0, sizeof(timeout));
-
-    timeout.tv_sec = 10;
-    rc = select(clientfd+1, &reading, NULL, NULL, &timeout);
     memset(&buf, 0, sizeof(buf));
-    if(rc > 0){
-      if(FD_ISSET(clientfd, &reading)){
-        byte_size = read(clientfd, buf, sizeof(buf));
-      }
-    }else if(rc == 0){
-      freeaddrinfo(results);
-      close(sockfd);
-      fprintf(stderr, "ERROR: TIMEOUT\n");
+    if(readMessage(clientfd, buf, sizeof(buf), 5) == -1)
       return EXIT_FAILURE;
-    }else{
-      perror("select");
-    }  
 
-    if(byte_size <= 0){
-      freeaddrinfo(results);
-      close(sockfd);
-      fprintf(stderr, "ERROR: read failed!\n");
-      return EXIT_FAILURE;
-    }
-    printf("Sent from client:\n%s", buf);
-
-    buf[byte_size] = '\0';
     int clientResult = atoi(buf);
-    memset(&tmsg, 0, sizeof(buf));
 
     if(clientResult == result){
       strcpy(buf, "OK\n");
@@ -229,14 +161,8 @@ int main(int argc, char *argv[]){
       strcpy(buf, "NOT OK\n");
     }
 
-    sent = write(clientfd, buf, strlen(buf));
-    if(sent == -1){
-      freeaddrinfo(results);
-      close(sockfd);
-      fprintf(stderr, "ERROR: sendto failed\n");
+    if(writeMessage(clientfd, buf) == -1)
       return EXIT_FAILURE;
-    }
-    printf("Sent to client:\n%s", buf);
 
   }
   
@@ -250,6 +176,51 @@ int main(int argc, char *argv[]){
 
   printf("EXIT SERVER\n");
   return EXIT_SUCCESS;
+}
+
+int writeMessage(int fd, const char* msg){
+  ssize_t sent = write(fd, msg, strlen(msg));
+  if(sent == -1){
+    close(fd);
+    perror("write");
+    return -1;
+  }
+
+  printf("Sent to client:\n%s", msg);
+  return 0;
+}
+
+int readMessage(int fd, char* buf, size_t bufsize, int timeOutSec){
+  fd_set reading;
+  struct timeval timeout;
+  int rc;
+
+  FD_ZERO(&reading);
+  FD_SET(fd, &reading);
+
+  timeout.tv_sec = timeOutSec;
+
+  rc = select(fd+1, &reading, NULL, NULL, &timeout);
+  if(rc == 0){
+    close(fd);
+    fprintf(stderr, "ERROR: TIMEOUT\n");
+    return EXIT_FAILURE;
+  }
+  else if(rc < 0){
+    perror("select");
+    return -1;
+  }
+
+  ssize_t byte_size = read(fd, buf, bufsize-1);
+  if(byte_size <= 0){
+    fprintf(stderr, "ERROR: read failed!\n");
+    return -1;
+  }
+
+  buf[byte_size] = '\0';
+  printf("Sent from client:\n%s", buf);
+
+  return 0;
 }
 
 int generateTask(char* buffer, size_t bufsize){
