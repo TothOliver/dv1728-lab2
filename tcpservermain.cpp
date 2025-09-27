@@ -23,6 +23,7 @@
 
 using namespace std;
 
+int handleClient(int clientfd);
 int writeMessage(int sockfd, const char* msg);
 int readMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec);
 int generateTask(char* buffer, size_t bufsize);
@@ -116,7 +117,7 @@ int main(int argc, char *argv[]){
     return EXIT_FAILURE;
   }
 
-  int listen_status = listen(sockfd, 5);
+  int listen_status = listen(sockfd, 10);
   if(listen_status == -1){
     fprintf(stderr, "ERROR: LISTEN FAILED %d\n", sockfd);
     return EXIT_FAILURE;
@@ -125,14 +126,38 @@ int main(int argc, char *argv[]){
   struct sockaddr_storage client_addr;
   socklen_t client_addr_size = sizeof(client_addr);
 
-  int clientfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_addr_size);
-  if(clientfd == -1){
-      perror("accept failed");
-      return EXIT_FAILURE;
+  while(true){
+    int clientfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_addr_size);
+    if(clientfd == -1){
+        perror("accept failed");
+        continue;
+    }
+
+    pid_t pid = fork();
+
+    if(pid < 0){
+      perror("fork");
+    }
+    else if(pid == 0){
+      close(sockfd);
+
+      handleClient(clientfd);
+
+      close(clientfd);
+      _exit(0);
+    }
+    else{
+      close(clientfd);
+    }
   }
 
-  char tmsg[] = "TEXT TCP 1.1\nBINART TCP 1.1\n";
+  printf("EXIT SERVER\n");
+  return EXIT_SUCCESS;
+}
 
+int handleClient(int clientfd){
+
+  char tmsg[] = "TEXT TCP 1.1\nBINARY TCP 1.1\n";
   if(writeMessage(clientfd, tmsg) == -1)
     return EXIT_FAILURE;
     
@@ -257,7 +282,6 @@ int main(int argc, char *argv[]){
     return EXIT_FAILURE;
   }
 
-  printf("EXIT SERVER\n");
   return EXIT_SUCCESS;
 }
 
