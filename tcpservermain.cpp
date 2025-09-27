@@ -260,7 +260,7 @@ int handleClient(int clientfd){
     }
 
     calcMessage response;
-    response.type = htons(22);
+    response.type = htons(2);
     response.protocol = htons(6);
     response.major_version = htons(1);
     response.minor_version = htons(1);
