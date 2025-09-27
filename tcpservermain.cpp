@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <protocol.h>
+#include <ctime>
 
 // Included to get the support library
 #include <calcLib.h>
@@ -167,6 +168,88 @@ int main(int argc, char *argv[]){
   }
   
   else if(strcmp(buf, "BINARY TCP 1.1 OK\n") == 0){
+
+    calcProtocol cp;
+
+    int a, result;
+    char* arith = randomType();
+    int v1 = randomInt();
+    int v2 = randomInt();
+
+    if(v2 == 0 && strcmp(arith, "div") == 0) v2 = 1;
+    if(strcmp(arith, "add") == 0){
+      a = 1;
+      result = v1 + v2;
+    }
+    if(strcmp(arith, "sub") == 0){
+      a = 2;
+      result = v1 - v2;
+    }
+    if(strcmp(arith, "mul") == 0){
+      a = 3;
+      result = v1 * v2;
+    }
+    if(strcmp(arith, "div") == 0){
+      a = 4;
+      result = v1 / v2;
+    }
+
+    srand(time(NULL));
+    uint32_t id = rand();
+
+    cp.type = htons(1);
+    cp.major_version = htons(1);
+    cp.minor_version = htons(1);
+    cp.id = htonl(id);
+    cp.arith = htonl(a);
+    cp.inValue1 = htonl(v1);
+    cp.inValue2 = htonl(v2);
+    cp.inResult = htonl(0);
+
+    if(write(clientfd, &cp, sizeof(cp)) == -1){
+      perror("write");
+      return EXIT_FAILURE;
+    }
+
+
+    calcProtocol reply;
+    ssize_t r = read(clientfd, &reply, sizeof(reply));
+    if(r != sizeof(reply)){
+      perror("read");
+      return EXIT_FAILURE;
+    }
+    printf("HERE\n");
+
+    reply.type          = ntohs(reply.type);
+    reply.major_version = ntohs(reply.major_version);
+    reply.minor_version = ntohs(reply.minor_version);
+    reply.id            = ntohl(reply.id);
+    reply.arith         = ntohl(reply.arith);
+    reply.inValue1      = ntohl(reply.inValue1);
+    reply.inValue2      = ntohl(reply.inValue2);
+    reply.inResult      = ntohl(reply.inResult);
+
+    if(reply.id != id){
+      fprintf(stderr, "ERROR: INVALID IP %d", reply.id);
+      return EXIT_FAILURE;
+    }
+
+    calcMessage response;
+    response.type = htons(22);
+    response.protocol = htons(6);
+    response.major_version = htons(1);
+    response.minor_version = htons(1);
+
+    if(reply.inResult == result){
+      response.message = htonl(1);
+    }else{
+      response.message = htonl(2);
+    }
+
+    if(write(clientfd, &response, sizeof(response)) == -1){
+      perror("write");
+      return EXIT_FAILURE;
+    }
 
   }
   else{
