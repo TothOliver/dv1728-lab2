@@ -75,6 +75,7 @@ int main(int argc, char *argv[]){
   }
 
   for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
+
     sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if(sockfd == -1){
       perror("socket");
@@ -87,6 +88,11 @@ int main(int argc, char *argv[]){
       close(sockfd);
       sockfd = -1;
       continue;
+    }
+
+    if (p->ai_family == AF_INET6) {
+      int no = 0;
+      setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
     }
 
     if(bind(sockfd, p->ai_addr, p->ai_addrlen) == 0){
