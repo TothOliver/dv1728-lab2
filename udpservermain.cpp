@@ -23,19 +23,7 @@ using namespace std;
 int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in* clientAddr, socklen_t addrLen);
 int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct sockaddr_in* clientAddr, socklen_t* addrLen);
 int generateTask(char* buffer, size_t bufsize);
-
-// Reverse the linked list of results
-struct addrinfo* reverseList(struct addrinfo* head) {
-    struct addrinfo* prev = NULL;
-    struct addrinfo* curr = head;
-    while (curr != NULL) {
-        struct addrinfo* next = curr->ai_next;
-        curr->ai_next = prev;
-        prev = curr;
-        curr = next;
-    }
-    return prev;
-}
+struct addrinfo* reverseList(struct addrinfo* head);
 
 
 int main(int argc, char *argv[]){
@@ -88,7 +76,7 @@ int main(int argc, char *argv[]){
   }
 
   results = reverseList(results);
-  
+
   for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
     sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if(sockfd == -1){
@@ -325,7 +313,7 @@ int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct so
   FD_ZERO(&reading);
   FD_SET(sockfd, &reading);
 
-  timeout.tv_sec = timeOutSec;
+  timeout.tv_sec = 0;
   timeout.tv_usec = 0;
 
   rc = select(sockfd+1, &reading, NULL, NULL, &timeout);
@@ -375,4 +363,16 @@ int generateTask(char* buffer, size_t bufsize){
   snprintf(buffer, bufsize, "%s %d %d\n", arith, v1, v2);
 
   return result;
+}
+
+struct addrinfo* reverseList(struct addrinfo* head){
+    struct addrinfo* prev = NULL;
+    struct addrinfo* curr = head;
+    while (curr != NULL){
+        struct addrinfo* next = curr->ai_next;
+        curr->ai_next = prev;
+        prev = curr;
+        curr = next;
+    }
+    return prev;
 }
