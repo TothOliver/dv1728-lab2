@@ -24,6 +24,19 @@ int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in*
 int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct sockaddr_in* clientAddr, socklen_t* addrLen);
 int generateTask(char* buffer, size_t bufsize);
 
+// Reverse the linked list of results
+struct addrinfo* reverseList(struct addrinfo* head) {
+    struct addrinfo* prev = NULL;
+    struct addrinfo* curr = head;
+    while (curr != NULL) {
+        struct addrinfo* next = curr->ai_next;
+        curr->ai_next = prev;
+        prev = curr;
+        curr = next;
+    }
+    return prev;
+}
+
 
 int main(int argc, char *argv[]){
   if (argc < 2) {
@@ -74,8 +87,9 @@ int main(int argc, char *argv[]){
     return EXIT_FAILURE;
   }
 
+  results = reverseList(results);
+  
   for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
-
     sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if(sockfd == -1){
       perror("socket");
@@ -88,11 +102,6 @@ int main(int argc, char *argv[]){
       close(sockfd);
       sockfd = -1;
       continue;
-    }
-
-    if (p->ai_family == AF_INET6) {
-      int no = 0;
-      setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
     }
 
     if(bind(sockfd, p->ai_addr, p->ai_addrlen) == 0){
