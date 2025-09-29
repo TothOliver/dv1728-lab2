@@ -6,10 +6,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <arpa/inet.h>
 #include <unistd.h>
 #include <errno.h>
-#include <stdint.h>
 #include <protocol.h>
 #include <ctime>
 
@@ -306,6 +304,7 @@ int readMessage(int fd, char* buf, size_t bufsize, int timeOutSec){
   FD_SET(fd, &reading);
 
   timeout.tv_sec = timeOutSec;
+  timeout.tv_usec = 0;
 
   rc = select(fd+1, &reading, NULL, NULL, &timeout);
   if(rc == 0){
