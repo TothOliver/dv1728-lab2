@@ -241,7 +241,6 @@ int handleClient(int clientfd){
       perror("read");
       return EXIT_FAILURE;
     }
-    printf("HERE\n");
 
     reply.type          = ntohs(reply.type);
     reply.major_version = ntohs(reply.major_version);

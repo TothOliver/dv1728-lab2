@@ -22,6 +22,7 @@ using namespace std;
 
 int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in* clientAddr, socklen_t addrLen);
 int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct sockaddr_in* clientAddr, socklen_t* addrLen);
+int generateTask(char* buffer, size_t bufsize);
 
 
 int main(int argc, char *argv[]){
@@ -220,7 +221,42 @@ int main(int argc, char *argv[]){
   }
   
   else if(byte_size == 13){ //TEXT
-    printf("Correct TEXT\n");
+    buf[byte_size] = '\0';
+    if(strcmp(buf, "TEXT UDP 1.1\n") != 0){
+      fprintf(stderr, "Incorrect TEXT message: %s", buf);
+      return EXIT_FAILURE;
+    }
+
+    memset(&buf, 0, sizeof(buf));
+    int result = generateTask(buf, sizeof(buf));
+
+    if(sendMessage(sockfd, &buf, sizeof(buf), &clientAddr, addrLen) == -1){
+      return EXIT_FAILURE;
+    }
+
+    memset(&buf, 0, sizeof(buf));
+    byte_size = recvMessage(sockfd, buf, sizeof(buf), 10, &clientAddr, &addrLen);
+
+    if(byte_size <= 0){
+      perror("recvMessage");
+      return EXIT_FAILURE;
+    }
+
+    int clientResult = atoi(buf);
+    memset(&buf, 0, sizeof(buf));
+
+    if(clientResult == result){
+      printf("OK\n");
+      strcpy(buf, "OK\n");
+    }
+    else{
+      printf("NOT OK\n");
+      strcpy(buf, "NOT OK\n");
+    }
+
+    if(sendMessage(sockfd, &buf, strlen(buf), &clientAddr, addrLen) == -1){
+      return EXIT_FAILURE;
+    }
 
   }
   
@@ -270,4 +306,34 @@ int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct so
   }
 
   return byte_size;
+}
+
+int generateTask(char* buffer, size_t bufsize){
+  char* arith = randomType();
+  int v1 = randomInt();
+  int v2 = randomInt();
+  int result;
+
+  if(strcmp(arith, "add") == 0){
+    result = v1 + v2;
+  }
+  else if(strcmp(arith, "sub") == 0){
+    result = v1 - v2;     
+  }
+  else if(strcmp(arith, "mul") == 0){
+    result = v1 * v2;
+  }
+  else if(strcmp(arith, "div") == 0){
+    if(v2 == 0)
+      v2 = 1;  
+    result = v1 / v2;
+  }
+  else{
+    fprintf(stderr, "ERROR: Invalid operation\n");
+    return EXIT_FAILURE;
+  }
+
+  snprintf(buffer, bufsize, "%s %d %d\n", arith, v1, v2);
+
+  return result;
 }
