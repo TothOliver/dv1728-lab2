@@ -112,163 +112,187 @@ int main(int argc, char *argv[]){
     return EXIT_FAILURE;
   }
 
-  char buf[1500];
-  struct sockaddr_in clientAddr;
-  socklen_t addrLen = sizeof(clientAddr);
+  fd_set reading;
+  struct timeval timeout;
+  int rc;
 
-  int byte_size = recvMessage(sockfd, buf, sizeof(buf), 10, &clientAddr, &addrLen);
-  
-  if(byte_size == sizeof(calcMessage)){ //BINARY
-    calcMessage cm;
-    memcpy(&cm, buf, sizeof(cm));
+  while(true){
+    FD_ZERO(&reading);
+    FD_SET(sockfd, &reading);
 
-    uint16_t type = ntohs(cm.type);
-    uint32_t message = ntohl(cm.message);
-    uint16_t protocol = ntohs(cm.protocol);
-    uint16_t majorv = ntohs(cm.major_version);
-    uint16_t minorv = ntohs(cm.minor_version);
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+    rc = select(sockfd+1, &reading, NULL, NULL, &timeout);
 
-    if(type != 22 || message != 0 || protocol != 17 || majorv != 1 || minorv != 1){
-      fprintf(stderr, "Incorrect calcMessage\n");
-      return EXIT_FAILURE;
+    if(rc == 0){
+      continue;
     }
-    
-    calcProtocol cp;
-
-    int a, result;
-    char* arith = randomType();
-    int v1 = randomInt();
-    int v2 = randomInt();
-
-    if(v2 == 0 && strcmp(arith, "div") == 0) v2 = 1;
-    if(strcmp(arith, "add") == 0){
-      a = 1;
-      result = v1 + v2;
-    }
-    if(strcmp(arith, "sub") == 0){
-      a = 2;
-      result = v1 - v2;
-    }
-    if(strcmp(arith, "mul") == 0){
-      a = 3;
-      result = v1 * v2;
-    }
-    if(strcmp(arith, "div") == 0){
-      a = 4;
-      result = v1 / v2;
+    else if(rc < 0){
+      perror("select");
+      break;
     }
 
-    srand(time(NULL));
-    uint32_t id = rand();
+    if (FD_ISSET(sockfd, &reading)) {
+      char buf[1500];
+      struct sockaddr_in clientAddr;
+      socklen_t addrLen = sizeof(clientAddr);
+      int byte_size = recvMessage(sockfd, buf, sizeof(buf), 5, &clientAddr, &addrLen);
+      
+      if(byte_size == sizeof(calcMessage)){ //BINARY
+        calcMessage cm;
+        memcpy(&cm, buf, sizeof(cm));
 
-    cp.type = htons(1);
-    cp.major_version = htons(1);
-    cp.minor_version = htons(1);
-    cp.id = htonl(id);
-    cp.arith = htonl(a);
-    cp.inValue1 = htonl(v1);
-    cp.inValue2 = htonl(v2);
-    cp.inResult = htonl(0);
+        uint16_t type = ntohs(cm.type);
+        uint32_t message = ntohl(cm.message);
+        uint16_t protocol = ntohs(cm.protocol);
+        uint16_t majorv = ntohs(cm.major_version);
+        uint16_t minorv = ntohs(cm.minor_version);
 
-    if(sendMessage(sockfd, &cp, sizeof(cp), &clientAddr, addrLen) == -1){
-      return EXIT_FAILURE;
+        if(type != 22 || message != 0 || protocol != 17 || majorv != 1 || minorv != 1){
+          fprintf(stderr, "Incorrect calcMessage\n");
+          return EXIT_FAILURE;
+        }
+        
+        calcProtocol cp;
+
+        int a, result;
+        char* arith = randomType();
+        int v1 = randomInt();
+        int v2 = randomInt();
+
+        if(v2 == 0 && strcmp(arith, "div") == 0) v2 = 1;
+        if(strcmp(arith, "add") == 0){
+          a = 1;
+          result = v1 + v2;
+        }
+        if(strcmp(arith, "sub") == 0){
+          a = 2;
+          result = v1 - v2;
+        }
+        if(strcmp(arith, "mul") == 0){
+          a = 3;
+          result = v1 * v2;
+        }
+        if(strcmp(arith, "div") == 0){
+          a = 4;
+          result = v1 / v2;
+        }
+
+        srand(time(NULL));
+        uint32_t id = rand();
+
+        cp.type = htons(1);
+        cp.major_version = htons(1);
+        cp.minor_version = htons(1);
+        cp.id = htonl(id);
+        cp.arith = htonl(a);
+        cp.inValue1 = htonl(v1);
+        cp.inValue2 = htonl(v2);
+        cp.inResult = htonl(0);
+
+        if(sendMessage(sockfd, &cp, sizeof(cp), &clientAddr, addrLen) == -1){
+          return EXIT_FAILURE;
+        }
+        printf("sendMessage\n");
+
+        memset(&buf, 0, sizeof(buf));
+        addrLen = sizeof(clientAddr);
+        int byte_size = recvMessage(sockfd, buf, sizeof(buf), 5, &clientAddr, &addrLen);
+        
+        if(byte_size != sizeof(calcProtocol)){
+          printf("Wrong Proctocol from recv\n");
+          return EXIT_FAILURE;
+        }
+
+        calcProtocol respons;
+        memcpy(&respons, buf, sizeof(respons));
+
+        uint16_t type2 = ntohs(respons.type);
+        uint16_t major_version = ntohs(respons.major_version);
+        uint16_t minor_version = ntohs(respons.minor_version);
+        uint32_t responsId = ntohl(respons.id);
+        int32_t inResult = ntohl(respons.inResult);
+
+        if(type2 != 2 || major_version != 1 || minor_version != 1 || responsId != id){
+          printf("type: %d, majv: %d, minv: %d, responsId: %d, id: %d\n", type, major_version, minor_version, responsId, id);
+          fprintf(stderr, "Incorrect calcProtocol\n");
+          return EXIT_FAILURE;
+        }
+
+        calcMessage reply;
+        reply.type = htons(1);
+        reply.protocol = htons(17);
+        reply.major_version = htons(1);
+        reply.minor_version = htons(1);
+
+        if(inResult == result){
+          reply.message = htonl(1);
+          printf("OK\n");
+        }
+        else{
+          reply.message = htonl(2);
+          printf("NOT OK\n");
+        }
+
+        if(sendMessage(sockfd, &reply, sizeof(reply), &clientAddr, addrLen) == -1){
+          return EXIT_FAILURE;
+        }
+
+      }
+      
+      else if(byte_size == 13){ //TEXT
+        buf[byte_size] = '\0';
+        if(strcmp(buf, "TEXT UDP 1.1\n") != 0){
+          fprintf(stderr, "Incorrect TEXT message: %s", buf);
+          return EXIT_FAILURE;
+        }
+
+        memset(&buf, 0, sizeof(buf));
+        int result = generateTask(buf, sizeof(buf));
+
+        if(sendMessage(sockfd, &buf, sizeof(buf), &clientAddr, addrLen) == -1){
+          return EXIT_FAILURE;
+        }
+
+        memset(&buf, 0, sizeof(buf));
+        byte_size = recvMessage(sockfd, buf, sizeof(buf), 5, &clientAddr, &addrLen);
+
+        if(byte_size <= 0){
+          perror("recvMessage");
+          return EXIT_FAILURE;
+        }
+
+        int clientResult = atoi(buf);
+        memset(&buf, 0, sizeof(buf));
+
+        if(clientResult == result){
+          printf("OK\n");
+          strcpy(buf, "OK\n");
+        }
+        else{
+          printf("NOT OK\n");
+          strcpy(buf, "NOT OK\n");
+        }
+
+        if(sendMessage(sockfd, &buf, strlen(buf), &clientAddr, addrLen) == -1){
+          return EXIT_FAILURE;
+        }
+
+      }
+      
+      else if(byte_size != -1){
+        printf("Wrong message byte_size: %d\n", byte_size);
+        return EXIT_FAILURE;
+      }
+      else{
+        printf("Message Invalid");
+        continue;
+      } 
     }
-    printf("sendMessage\n");
-
-    memset(&buf, 0, sizeof(buf));
-    addrLen = sizeof(clientAddr);
-    int byte_size = recvMessage(sockfd, buf, sizeof(buf), 10, &clientAddr, &addrLen);
-    
-    if(byte_size != sizeof(calcProtocol)){
-      printf("Wrong Proctocol from recv\n");
-      return EXIT_FAILURE;
-    }
-
-    calcProtocol respons;
-    memcpy(&respons, buf, sizeof(respons));
-
-    uint16_t type2 = ntohs(respons.type);
-    uint16_t major_version = ntohs(respons.major_version);
-    uint16_t minor_version = ntohs(respons.minor_version);
-    uint32_t responsId = ntohl(respons.id);
-    int32_t inResult = ntohl(respons.inResult);
-
-    if(type2 != 2 || major_version != 1 || minor_version != 1 || responsId != id){
-      printf("type: %d, majv: %d, minv: %d, responsId: %d, id: %d\n", type, major_version, minor_version, responsId, id);
-      fprintf(stderr, "Incorrect calcProtocol\n");
-      return EXIT_FAILURE;
-    }
-
-    calcMessage reply;
-    reply.type = htons(1);
-    reply.protocol = htons(17);
-    reply.major_version = htons(1);
-    reply.minor_version = htons(1);
-
-    if(inResult == result){
-      reply.message = htonl(1);
-      printf("OK\n");
-    }
-    else{
-      reply.message = htonl(2);
-      printf("NOT OK\n");
-    }
-
-    if(sendMessage(sockfd, &reply, sizeof(reply), &clientAddr, addrLen) == -1){
-      return EXIT_FAILURE;
-    }
-
   }
-  
-  else if(byte_size == 13){ //TEXT
-    buf[byte_size] = '\0';
-    if(strcmp(buf, "TEXT UDP 1.1\n") != 0){
-      fprintf(stderr, "Incorrect TEXT message: %s", buf);
-      return EXIT_FAILURE;
-    }
 
-    memset(&buf, 0, sizeof(buf));
-    int result = generateTask(buf, sizeof(buf));
-
-    if(sendMessage(sockfd, &buf, sizeof(buf), &clientAddr, addrLen) == -1){
-      return EXIT_FAILURE;
-    }
-
-    memset(&buf, 0, sizeof(buf));
-    byte_size = recvMessage(sockfd, buf, sizeof(buf), 10, &clientAddr, &addrLen);
-
-    if(byte_size <= 0){
-      perror("recvMessage");
-      return EXIT_FAILURE;
-    }
-
-    int clientResult = atoi(buf);
-    memset(&buf, 0, sizeof(buf));
-
-    if(clientResult == result){
-      printf("OK\n");
-      strcpy(buf, "OK\n");
-    }
-    else{
-      printf("NOT OK\n");
-      strcpy(buf, "NOT OK\n");
-    }
-
-    if(sendMessage(sockfd, &buf, strlen(buf), &clientAddr, addrLen) == -1){
-      return EXIT_FAILURE;
-    }
-
-  }
-  
-  else if(byte_size != -1){
-    printf("Wrong message byte_size: %d\n", byte_size);
-    return EXIT_FAILURE;
-  }
-  else{
-    return EXIT_FAILURE;
-  }
- 
 }
+
 int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in* clientAddr, socklen_t addrLen){
   ssize_t sent = sendto(sockfd, msg, msgSize, 0, (struct sockaddr*)clientAddr, addrLen);
   if(sent == -1){
