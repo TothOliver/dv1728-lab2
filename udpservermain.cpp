@@ -80,7 +80,7 @@ int main(int argc, char *argv[]){
     return EXIT_FAILURE;
   }
 
-  //results = reverseList(results);
+  results = reverseList(results);
 
   for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
     sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
@@ -462,8 +462,7 @@ int handleClient(int sockfd, char* buf, int byte_size, struct sockaddr_in client
 */
 
 int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in* clientAddr, socklen_t addrLen){
-  socklen_t addrLen2 = sizeof(clientAddr);
-  ssize_t sent = sendto(sockfd, msg, msgSize, 0, (struct sockaddr*)clientAddr, addrLen2);
+  ssize_t sent = sendto(sockfd, msg, msgSize, 0, (struct sockaddr*)clientAddr, addrLen);
   if(sent == -1){
     perror("sendto failed");
     return -1;
@@ -472,8 +471,7 @@ int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in*
 }
 
 int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct sockaddr_in* clientAddr, socklen_t* addrLen){
-  socklen_t addrLen2 = sizeof(clientAddr);
-  ssize_t byte_size = recvfrom(sockfd, buf, bufsize, 0, (struct sockaddr*)clientAddr, &addrLen2);
+  ssize_t byte_size = recvfrom(sockfd, buf, bufsize, 0, (struct sockaddr*)clientAddr, addrLen);
   if(byte_size <= 0){
     fprintf(stderr, "ERROR: read failed!\n");
     return -1;
