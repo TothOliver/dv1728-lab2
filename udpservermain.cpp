@@ -462,7 +462,8 @@ int handleClient(int sockfd, char* buf, int byte_size, struct sockaddr_in client
 */
 
 int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in* clientAddr, socklen_t addrLen){
-  ssize_t sent = sendto(sockfd, msg, msgSize, 0, (struct sockaddr*)clientAddr, addrLen);
+  socklen_t addrLen2 = sizeof(clientAddr);
+  ssize_t sent = sendto(sockfd, msg, msgSize, 0, (struct sockaddr*)clientAddr, addrLen2);
   if(sent == -1){
     perror("sendto failed");
     return -1;
