@@ -306,25 +306,6 @@ int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in*
 }
 
 int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct sockaddr_in* clientAddr, socklen_t* addrLen){
-  fd_set reading;
-  struct timeval timeout;
-  int rc;
-
-  FD_ZERO(&reading);
-  FD_SET(sockfd, &reading);
-
-  timeout.tv_sec = timeOutSec;
-  timeout.tv_usec = 0;
-
-  rc = select(sockfd+1, &reading, NULL, NULL, &timeout);
-  if(rc == 0){
-    fprintf(stderr, "ERROR: TIMEOUT\n");
-    return EXIT_FAILURE;
-  }
-  else if(rc < 0){
-    perror("select");
-    return -1;
-  }
 
   ssize_t byte_size = recvfrom(sockfd, buf, bufsize, 0, (struct sockaddr*)clientAddr, addrLen);
   if(byte_size <= 0){
