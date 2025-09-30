@@ -4,14 +4,17 @@
 /* You will to add includes here */
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <errno.h>
 #include <protocol.h>
 #include <ctime>
+#include <string>
 
 // Included to get the support library
 #include <calcLib.h>
+#include <map>
 
 // Enable if you want debugging to be printed, see examble below.
 // Alternative, pass CFLAGS=-DDEBUG to make, make CFLAGS=-DDEBUG
@@ -24,6 +27,8 @@ int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in*
 int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct sockaddr_in* clientAddr, socklen_t* addrLen);
 int generateTask(char* buffer, size_t bufsize);
 struct addrinfo* reverseList(struct addrinfo* head);
+bool isCalcMessage(const char* buf, int byte_size);
+bool isCalcProtocol(const char* buf, int byte_size);
 
 
 int main(int argc, char *argv[]){
@@ -119,6 +124,8 @@ int main(int argc, char *argv[]){
   struct timeval timeout;
   int rc;
 
+  std::map<std::string, int> pendingResults;
+
   while(true){
     FD_ZERO(&reading);
     FD_SET(sockfd, &reading);
@@ -135,12 +142,171 @@ int main(int argc, char *argv[]){
       break;
     }
 
-    if (FD_ISSET(sockfd, &reading)) {
+    if(FD_ISSET(sockfd, &reading)){
       char buf[1500];
       struct sockaddr_in clientAddr;
       socklen_t addrLen = sizeof(clientAddr);
       int byte_size = recvMessage(sockfd, buf, sizeof(buf), 5, &clientAddr, &addrLen);
+
+      if(isCalcMessage(buf, byte_size)){
+        calcProtocol cp;
+
+        int a, result;
+        char* arith = randomType();
+        int v1 = randomInt();
+        int v2 = randomInt();
+
+        if(v2 == 0 && strcmp(arith, "div") == 0) v2 = 1;
+        if(strcmp(arith, "add") == 0){
+          a = 1;
+          result = v1 + v2;
+        }
+        if(strcmp(arith, "sub") == 0){
+          a = 2;
+          result = v1 - v2;
+        }
+        if(strcmp(arith, "mul") == 0){
+          a = 3;
+          result = v1 * v2;
+        }
+        if(strcmp(arith, "div") == 0){
+          a = 4;
+          result = v1 / v2;
+        }
+
+        srand(time(NULL));
+        uint32_t id = rand();
+
+        cp.type = htons(1);
+        cp.major_version = htons(1);
+        cp.minor_version = htons(1);
+        cp.id = htonl(id);
+        cp.arith = htonl(a);
+        cp.inValue1 = htonl(v1);
+        cp.inValue2 = htonl(v2);
+        cp.inResult = htonl(0);
+
+        if(sendMessage(sockfd, &cp, sizeof(cp), &clientAddr, addrLen) == -1){
+          return EXIT_FAILURE;
+        }
+        printf("sendMessage calcProtocol\n");
+
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(clientAddr.sin_addr), ip, sizeof(ip));
+        uint16_t port = ntohs(clientAddr.sin_port);
+
+        std::string key = std::string(ip) + ":" + ::to_string(port) + ":" + std::to_string(id);
+
+        pendingResults[key] = result;
+      }
       
+      else if(isCalcProtocol(buf, byte_size)){
+        calcMessage reply;
+        reply.type = htons(1);
+        reply.protocol = htons(17);
+        reply.major_version = htons(1);
+        reply.minor_version = htons(1);
+        
+        calcProtocol cp;
+        memcpy(&cp, buf, sizeof(cp));
+        uint32_t id = ntohl(cp.id);
+        int32_t inResult = ntohl(cp.inResult);
+
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(clientAddr.sin_addr), ip, sizeof(ip));
+        uint16_t port = ntohs(clientAddr.sin_port);
+
+        int result;
+        std::string key = std::string(ip) + ":" + std::to_string(port) + ":" + std::to_string(id);
+        if(pendingResults.find(key) != pendingResults.end()){
+          result = pendingResults[key];
+          pendingResults.erase(key); 
+        }else{
+          printf("No matching client adress\n");
+        } 
+
+        if(inResult == result){
+          reply.message = htonl(1);
+          printf("OK\n");
+        }
+        else{
+          reply.message = htonl(2);
+          printf("NOT OK\n");
+        }
+
+        if(sendMessage(sockfd, &reply, sizeof(reply), &clientAddr, addrLen) == -1){
+          return EXIT_FAILURE;
+        }
+      }
+    
+      else if(byte_size > 0){
+        buf[byte_size] = '\0';
+
+        if(strcmp(buf, "TEXT UDP 1.1\n") == 0){
+          memset(&buf, 0, sizeof(buf));
+          int result = generateTask(buf, sizeof(buf));
+
+          if(sendMessage(sockfd, &buf, strlen(buf), &clientAddr, addrLen) == -1){
+            return EXIT_FAILURE;
+          }
+          
+          char ip[INET_ADDRSTRLEN];
+          inet_ntop(AF_INET, &(clientAddr.sin_addr), ip, sizeof(ip));
+          uint16_t port = ntohs(clientAddr.sin_port);
+
+          std::string key = std::string(ip) + ":" + std::to_string(port);
+          pendingResults[key] = result;
+
+        }
+        else{
+          bool isNumber = true;
+          for(int i = 0; i < byte_size; i++){
+            if(!(isdigit(buf[i]) || buf[i] == '-' || buf[i] == '\n')){
+                isNumber = false;
+                break;
+            }
+          }
+          if(isNumber == true){
+            int clientResult = atoi(buf);
+            memset(&buf, 0, sizeof(buf));
+
+            char ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &(clientAddr.sin_addr), ip, sizeof(ip));
+            uint16_t port = ntohs(clientAddr.sin_port);
+            int result;
+            
+            std::string key = std::string(ip) + ":" + std::to_string(port);
+            if(pendingResults.find(key) != pendingResults.end()){
+                result = pendingResults[key];
+                pendingResults.erase(key);
+            }
+            else{
+              printf("No matching client adress\n");
+            } 
+
+            if(clientResult == result){
+              printf("OK\n");
+              strcpy(buf, "OK\n");
+            }
+            else{
+              printf("NOT OK\n");
+              strcpy(buf, "NOT OK\n");
+            }
+
+            if(sendMessage(sockfd, &buf, strlen(buf), &clientAddr, addrLen) == -1){
+              return EXIT_FAILURE;
+            }
+          }
+        }
+      }
+      else{
+        perror("recv");
+      }
+    }
+  }
+}
+
+int handleClient(int sockfd, char* buf, int byte_size, struct sockaddr_in clientAddr, socklen_t addrLen){
       if(byte_size == sizeof(calcMessage)){ //BINARY
         calcMessage cm;
         memcpy(&cm, buf, sizeof(cm));
@@ -196,7 +362,7 @@ int main(int argc, char *argv[]){
         if(sendMessage(sockfd, &cp, sizeof(cp), &clientAddr, addrLen) == -1){
           return EXIT_FAILURE;
         }
-        printf("sendMessage\n");
+        printf("sendMessage calcProtocol\n");
 
         memset(&buf, 0, sizeof(buf));
         addrLen = sizeof(clientAddr);
@@ -280,7 +446,6 @@ int main(int argc, char *argv[]){
         if(sendMessage(sockfd, &buf, strlen(buf), &clientAddr, addrLen) == -1){
           return EXIT_FAILURE;
         }
-
       }
       
       else if(byte_size != -1){
@@ -289,11 +454,9 @@ int main(int argc, char *argv[]){
       }
       else{
         printf("Message Invalid");
-        continue;
-      } 
-    }
-  }
 
+      } 
+      return EXIT_SUCCESS;
 }
 
 int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in* clientAddr, socklen_t addrLen){
@@ -356,4 +519,44 @@ struct addrinfo* reverseList(struct addrinfo* head){
         curr = next;
     }
     return prev;
+}
+
+bool isCalcMessage(const char* buf, int byte_size){
+    if(byte_size != sizeof(calcMessage)){
+        return false;
+    }
+
+    calcMessage cm;
+    memcpy(&cm, buf, sizeof(cm));
+
+    uint16_t type = ntohs(cm.type);
+    uint32_t message = ntohl(cm.message);
+    uint16_t protocol = ntohs(cm.protocol);
+    uint16_t majorv = ntohs(cm.major_version);
+    uint16_t minorv = ntohs(cm.minor_version);
+
+    if(type == 22 && message == 0 && protocol == 17 && majorv == 1 && minorv == 1){
+      return true;
+    }
+
+    return false;
+}
+
+bool isCalcProtocol(const char* buf, int byte_size){
+    if(byte_size != sizeof(calcProtocol)){
+        return false;
+    }
+
+    calcProtocol cp;
+    memcpy(&cp, buf, sizeof(cp));
+
+    uint16_t type = ntohs(cp.type);
+    uint16_t majorv = ntohs(cp.major_version);
+    uint16_t minorv = ntohs(cp.minor_version);
+
+    if((type == 1 || type == 2) && majorv == 1 && minorv == 1) {
+      return true;
+    }
+
+    return false;
 }
