@@ -80,7 +80,7 @@ int main(int argc, char *argv[]){
     return EXIT_FAILURE;
   }
 
-  results = reverseList(results);
+  //results = reverseList(results);
 
   for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
     sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
@@ -106,7 +106,6 @@ int main(int argc, char *argv[]){
       sockfd = -1;
     }
   }
-  freeaddrinfo(results);
 
   if(sockfd == -1){
     fprintf(stderr, "ERROR: CANT CONNECT TO %d\n", sockfd);
@@ -126,6 +125,7 @@ int main(int argc, char *argv[]){
 
   std::map<std::string, int> pendingResults;
 
+  printf("We reach before the while loop\n");
   while(true){
     FD_ZERO(&reading);
     FD_SET(sockfd, &reading);
@@ -177,7 +177,7 @@ int main(int argc, char *argv[]){
         srand(time(NULL));
         uint32_t id = rand();
 
-        cp.type = htons(1);
+        cp.type = htons(2);
         cp.major_version = htons(1);
         cp.minor_version = htons(1);
         cp.id = htonl(id);
@@ -306,6 +306,7 @@ int main(int argc, char *argv[]){
   }
 }
 
+/*
 int handleClient(int sockfd, char* buf, int byte_size, struct sockaddr_in clientAddr, socklen_t addrLen){
       if(byte_size == sizeof(calcMessage)){ //BINARY
         calcMessage cm;
@@ -458,6 +459,7 @@ int handleClient(int sockfd, char* buf, int byte_size, struct sockaddr_in client
       } 
       return EXIT_SUCCESS;
 }
+*/
 
 int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in* clientAddr, socklen_t addrLen){
   ssize_t sent = sendto(sockfd, msg, msgSize, 0, (struct sockaddr*)clientAddr, addrLen);
@@ -476,6 +478,11 @@ int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct so
     return -1;
   }
 
+  char ip[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &(clientAddr->sin_addr), ip, sizeof(ip));
+  uint16_t port = ntohs(clientAddr->sin_port);
+
+  printf("Recv %zd bytes from %s:%d\n", byte_size, ip, port);
   return byte_size;
 }
 
