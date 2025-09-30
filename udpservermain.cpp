@@ -125,12 +125,11 @@ int main(int argc, char *argv[]){
 
   std::map<std::string, int> pendingResults;
 
-  printf("We reach before the while loop\n");
   while(true){
     FD_ZERO(&reading);
     FD_SET(sockfd, &reading);
 
-    timeout.tv_sec = 10;
+    timeout.tv_sec = 1;
     timeout.tv_usec = 0;
     rc = select(sockfd+1, &reading, NULL, NULL, &timeout);
 
@@ -177,7 +176,7 @@ int main(int argc, char *argv[]){
         srand(time(NULL));
         uint32_t id = rand();
 
-        cp.type = htons(1);
+        cp.type = htons(2);
         cp.major_version = htons(1);
         cp.minor_version = htons(1);
         cp.id = htonl(id);
@@ -202,7 +201,7 @@ int main(int argc, char *argv[]){
       
       else if(isCalcProtocol(buf, byte_size)){
         calcMessage reply;
-        reply.type = htons(1);
+        reply.type = htons(2);
         reply.protocol = htons(17);
         reply.major_version = htons(1);
         reply.minor_version = htons(1);
