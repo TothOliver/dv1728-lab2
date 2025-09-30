@@ -71,9 +71,9 @@ int main(int argc, char *argv[]){
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_DGRAM;
-  hints.ai_flags = AI_PASSIVE;
+  //hints.ai_flags = AI_PASSIVE;
 
-  int status = getaddrinfo(hoststring, portstring, &hints, &results);
+  int status = getaddrinfo(NULL, portstring, &hints, &results);
   if(status != 0 || results == NULL)
   {
     fprintf(stderr, "ERROR: RESOLVE ISSUE\n");
@@ -176,7 +176,7 @@ int main(int argc, char *argv[]){
         srand(time(NULL));
         uint32_t id = rand();
 
-        cp.type = htons(2);
+        cp.type = htons(1);
         cp.major_version = htons(1);
         cp.minor_version = htons(1);
         cp.id = htonl(id);
