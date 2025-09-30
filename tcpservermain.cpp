@@ -220,7 +220,7 @@ int handleClient(int clientfd){
     srand(time(NULL));
     uint32_t id = rand();
 
-    cp.type = htons(2);
+    cp.type = htons(1);
     cp.major_version = htons(1);
     cp.minor_version = htons(1);
     cp.id = htonl(id);
