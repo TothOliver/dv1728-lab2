@@ -243,7 +243,7 @@ int main(int argc, char *argv[]){
 
       }
       
-      else if(byte_size == 13){ //TEXT
+      else if(byte_size >= 12 && byte_size <= 14){ //TEXT
         buf[byte_size] = '\0';
         if(strcmp(buf, "TEXT UDP 1.1\n") != 0){
           fprintf(stderr, "Incorrect TEXT message: %s", buf);
@@ -253,7 +253,7 @@ int main(int argc, char *argv[]){
         memset(&buf, 0, sizeof(buf));
         int result = generateTask(buf, sizeof(buf));
 
-        if(sendMessage(sockfd, &buf, sizeof(buf), &clientAddr, addrLen) == -1){
+        if(sendMessage(sockfd, &buf, strlen(buf), &clientAddr, addrLen) == -1){
           return EXIT_FAILURE;
         }
 
@@ -313,7 +313,7 @@ int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct so
   FD_ZERO(&reading);
   FD_SET(sockfd, &reading);
 
-  timeout.tv_sec = 0;
+  timeout.tv_sec = timeOutSec;
   timeout.tv_usec = 0;
 
   rc = select(sockfd+1, &reading, NULL, NULL, &timeout);
