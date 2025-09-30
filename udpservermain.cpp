@@ -471,8 +471,8 @@ int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in*
 }
 
 int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct sockaddr_in* clientAddr, socklen_t* addrLen){
-
-  ssize_t byte_size = recvfrom(sockfd, buf, bufsize, 0, (struct sockaddr*)clientAddr, addrLen);
+  socklen_t addrLen2 = sizeof(clientAddr);
+  ssize_t byte_size = recvfrom(sockfd, buf, bufsize, 0, (struct sockaddr*)clientAddr, &addrLen2);
   if(byte_size <= 0){
     fprintf(stderr, "ERROR: read failed!\n");
     return -1;
