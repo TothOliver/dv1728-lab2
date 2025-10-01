@@ -93,9 +93,8 @@ int main(int argc, char *argv[]){
   int sockfd, bind_status;
 
   memset(&hints, 0, sizeof hints);
-  hints.ai_family = AF_UNSPEC;
+  hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_DGRAM;
-  hints.ai_flags = AI_PASSIVE;
 
   int status = getaddrinfo(hoststring, portstring, &hints, &results);
   if(status != 0 || results == NULL)
@@ -148,7 +147,22 @@ int main(int argc, char *argv[]){
 
   std::unordered_map<ClientKey, ClientResult, ClientKeyHash> pending;
 
-  printf("Socket family");
+  struct sockaddr_storage addr;
+  socklen_t len = sizeof(addr);
+  if (getsockname(sockfd, (struct sockaddr*)&addr, &len) == 0) {
+      if (addr.ss_family == AF_INET) {
+          struct sockaddr_in *sin = (struct sockaddr_in*)&addr;
+          char ip[INET_ADDRSTRLEN];
+          inet_ntop(AF_INET, &sin->sin_addr, ip, sizeof(ip));
+          printf("Bound IPv4 socket on %s:%d\n", ip, ntohs(sin->sin_port));
+      } else if (addr.ss_family == AF_INET6) {
+          struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)&addr;
+          char ip[INET6_ADDRSTRLEN];
+          inet_ntop(AF_INET6, &sin6->sin6_addr, ip, sizeof(ip));
+          printf("Bound IPv6 socket on [%s]:%d\n", ip, ntohs(sin6->sin6_port));
+      }
+  }
+
   while(true){
     FD_ZERO(&reading);
     FD_SET(sockfd, &reading);
@@ -173,31 +187,6 @@ int main(int argc, char *argv[]){
     else if(rc < 0){
       perror("select");
       break;
-    }
-
-    struct sockaddr_storage addr;
-    socklen_t len = sizeof(addr);
-
-    if(getsockname(sockfd, (struct sockaddr*)&addr, &len) == -1){
-        perror("getsockname");
-    }
-    else 
-    {
-        if (addr.ss_family == AF_INET){
-            struct sockaddr_in *sin = (struct sockaddr_in*)&addr;
-            char ip[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &sin->sin_addr, ip, sizeof(ip));
-            printf("Socket is IPv4, bound to %s:%d\n", ip, ntohs(sin->sin_port));
-        }
-        else if(addr.ss_family == AF_INET6){
-            struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)&addr;
-            char ip[INET6_ADDRSTRLEN];
-            inet_ntop(AF_INET6, &sin6->sin6_addr, ip, sizeof(ip));
-            printf("Socket is IPv6, bound to [%s]:%d\n", ip, ntohs(sin6->sin6_port));
-        }
-        else{
-            printf("Socket has unknown family %d\n", addr.ss_family);
-        }
     }
 
     if(FD_ISSET(sockfd, &reading)){
