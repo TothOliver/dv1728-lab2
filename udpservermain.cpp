@@ -42,19 +42,20 @@ struct ClientResult{
 };
 
 struct ClientKey{
-  in_addr addr;
-  uint16_t port;
-  bool operator==(const ClientKey &other) const{
-    return addr.s_addr == other.addr.s_addr && port == other.port;
+  sockaddr_storage addr;
+  socklen_t len;
+
+  bool operator==(const ClientKey &other) const {
+    return len == other.len && memcmp(&addr, &other.addr, len) == 0;
   }
 };
 
-struct ClientKeyHash{
-  std::size_t operator()(const ClientKey &k) const{
-    return std::hash<uint32_t>()(k.addr.s_addr) ^ (std::hash<uint16_t>()(k.port) << 1);
+struct ClientKeyHash {
+  std::size_t operator()(const ClientKey &k) const {
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(&k.addr);
+    return std::hash<std::string>()(std::string(data, data + k.len));
   }
 };
-
 int main(int argc, char *argv[]){
   if (argc < 2) {
     fprintf(stderr, "Usage: %s protocol://server:port/path.\n", argv[0]);
@@ -102,47 +103,44 @@ int main(int argc, char *argv[]){
     fprintf(stderr, "ERROR: RESOLVE ISSUE\n");
     return EXIT_FAILURE;
   }
+  
+  for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
+    sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+    if(sockfd == -1){
+      perror("socket");
+      continue;
+    }
 
-  sockfd = -1;
-  bind_status = -1;
+    int yes = 1;
+    if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1){
+      perror("setsockopt");
+      close(sockfd);
+      sockfd = -1;
+      continue;
+    }
 
-  for(int pass = 0; pass < 2 && sockfd == -1; ++pass){
-    for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
-      if(pass == 0 && p->ai_family != AF_INET) 
-        continue;
-      if(pass == 1 && p->ai_family != AF_INET6) 
-        continue;
 
-      sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-      if(sockfd == -1){
-          perror("socket");
-          continue;
-      }
-
-      int yes = 1;
-      if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1){
-        perror("setsockopt");
-        close(sockfd);
-        sockfd = -1;
-        continue;
-      }
-
-      if(bind(sockfd, p->ai_addr, p->ai_addrlen) == 0){
-        bind_status = 0;
-        break;
-      } 
-      else{
-        perror("bind");
-        close(sockfd);
-        sockfd = -1;
-      }
+    if(bind(sockfd, p->ai_addr, p->ai_addrlen) == 0){
+      bind_status = 0;
+      break;
+    }else{
+      perror("bind");
+      close(sockfd);
+      sockfd = -1;
     }
   }
   freeaddrinfo(results);
 
-  if(sockfd == -1 || bind_status == -1){
-    fprintf(stderr, "ERROR: Could not bind to any address\n");
-    exit(EXIT_FAILURE);
+  if(sockfd == -1){
+    fprintf(stderr, "ERROR: CANT CONNECT TO %d\n", sockfd);
+    return EXIT_FAILURE;
+  }
+  if(bind_status == -1){
+    freeaddrinfo(results);
+    close(sockfd);
+    perror("bind");
+    fprintf(stderr, "ERROR: CANT BIND to %d\n", sockfd);
+    return EXIT_FAILURE;
   }
 
   fd_set reading;
@@ -196,7 +194,7 @@ int main(int argc, char *argv[]){
     if(FD_ISSET(sockfd, &reading)){
     
       char buf[1500];
-      struct sockaddr_in clientAddr;
+      struct sockaddr_storage clientAddr;
       socklen_t addrLen = sizeof(clientAddr);
       printf("Before recvfrom\n");
       ssize_t byte_size = recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr*)&clientAddr, &addrLen);
@@ -254,8 +252,8 @@ int main(int argc, char *argv[]){
         printf("sendMessage calcProtocol\n");
 
         ClientKey key;
-        key.addr = clientAddr.sin_addr;
-        key.port = ntohs(clientAddr.sin_port);
+        key.addr = clientAddr;
+        key.len = addrLen;
         std::to_string(id);
 
         ClientResult cr;
@@ -280,8 +278,8 @@ int main(int argc, char *argv[]){
 
         int result;
         ClientKey key;
-        key.addr = clientAddr.sin_addr;
-        key.port = ntohs(clientAddr.sin_port);
+        key.addr = clientAddr;
+        key.len = addrLen;
 
         auto it = pending.find(key);
           if(it != pending.end()){
@@ -324,8 +322,8 @@ int main(int argc, char *argv[]){
           }
 
           ClientKey key;
-          key.addr = clientAddr.sin_addr;
-          key.port = ntohs(clientAddr.sin_port);
+          key.addr = clientAddr;
+          key.len = addrLen;
 
           ClientResult cr;
           cr.result = result;
@@ -348,8 +346,8 @@ int main(int argc, char *argv[]){
             int result;
 
             ClientKey key;
-            key.addr = clientAddr.sin_addr;
-            key.port = ntohs(clientAddr.sin_port);
+            key.addr = clientAddr;
+            key.len = addrLen;
 
             auto it = pending.find(key);
             if(it != pending.end()){
