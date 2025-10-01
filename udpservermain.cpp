@@ -188,14 +188,10 @@ int main(int argc, char *argv[]){
       perror("select");
       break;
     }
-
-    if(FD_ISSET(sockfd, &reading)){
     
       char buf[1500];
       struct sockaddr_in clientAddr;
       socklen_t addrLen = sizeof(clientAddr);
-      //int byte_size = recvMessage(sockfd, buf, sizeof(buf), 5, &clientAddr, &addrLen);
-
       printf("Before recvfrom\n");
       ssize_t byte_size = recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr*)&clientAddr, &addrLen);
       if(byte_size <= 0){
@@ -379,7 +375,6 @@ int main(int argc, char *argv[]){
       else{
         perror("recv");
       }
-    }
   }
 }
 
