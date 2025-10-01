@@ -148,6 +148,7 @@ int main(int argc, char *argv[]){
 
   std::unordered_map<ClientKey, ClientResult, ClientKeyHash> pending;
 
+  printf("Socket and bind wokr\n");
   while(true){
     FD_ZERO(&reading);
     FD_SET(sockfd, &reading);
@@ -166,6 +167,7 @@ int main(int argc, char *argv[]){
     }
 
     if(rc == 0){
+      printf("ohoh\n");
       continue;
     }
     else if(rc < 0){
@@ -179,6 +181,7 @@ int main(int argc, char *argv[]){
       socklen_t addrLen = sizeof(clientAddr);
       //int byte_size = recvMessage(sockfd, buf, sizeof(buf), 5, &clientAddr, &addrLen);
 
+      printf("Before recvfrom\n");
       ssize_t byte_size = recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr*)&clientAddr, &addrLen);
       if(byte_size <= 0){
         fprintf(stderr, "ERROR: read failed!\n");
