@@ -117,7 +117,7 @@ int main(int argc, char *argv[]){
       sockfd = -1;
       continue;
     }
-    freeaddrinfo(results);
+
 
     if(bind(sockfd, p->ai_addr, p->ai_addrlen) == 0){
       bind_status = 0;
@@ -128,7 +128,8 @@ int main(int argc, char *argv[]){
       sockfd = -1;
     }
   }
-
+  freeaddrinfo(results);
+  
   if(sockfd == -1){
     fprintf(stderr, "ERROR: CANT CONNECT TO %d\n", sockfd);
     return EXIT_FAILURE;
@@ -188,6 +189,8 @@ int main(int argc, char *argv[]){
       perror("select");
       break;
     }
+
+    if(FD_ISSET(sockfd, &reading)){
     
       char buf[1500];
       struct sockaddr_in clientAddr;
@@ -375,6 +378,7 @@ int main(int argc, char *argv[]){
       else{
         perror("recv");
       }
+    }
   }
 }
 
