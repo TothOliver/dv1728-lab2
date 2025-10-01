@@ -37,6 +37,7 @@ bool isCalcProtocol(const char* buf, int byte_size);
 struct ClientResult{
   int result;
   int id;
+  socklen_t addrLen;
   Clock::time_point deadline;     
 };
 
@@ -147,7 +148,7 @@ int main(int argc, char *argv[]){
 
   std::unordered_map<ClientKey, ClientResult, ClientKeyHash> pending;
 
-  printf("Socket and bind wokr\n");
+  printf("Socket family");
   while(true){
     FD_ZERO(&reading);
     FD_SET(sockfd, &reading);
@@ -174,9 +175,33 @@ int main(int argc, char *argv[]){
       break;
     }
 
-    if(FD_ISSET(sockfd, &reading)){
-      printf("hmmm\n");
+    struct sockaddr_storage addr;
+    socklen_t len = sizeof(addr);
+
+    if(getsockname(sockfd, (struct sockaddr*)&addr, &len) == -1){
+        perror("getsockname");
     }
+    else 
+    {
+        if (addr.ss_family == AF_INET){
+            struct sockaddr_in *sin = (struct sockaddr_in*)&addr;
+            char ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &sin->sin_addr, ip, sizeof(ip));
+            printf("Socket is IPv4, bound to %s:%d\n", ip, ntohs(sin->sin_port));
+        }
+        else if(addr.ss_family == AF_INET6){
+            struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)&addr;
+            char ip[INET6_ADDRSTRLEN];
+            inet_ntop(AF_INET6, &sin6->sin6_addr, ip, sizeof(ip));
+            printf("Socket is IPv6, bound to [%s]:%d\n", ip, ntohs(sin6->sin6_port));
+        }
+        else{
+            printf("Socket has unknown family %d\n", addr.ss_family);
+        }
+    }
+
+    if(FD_ISSET(sockfd, &reading)){
+    
       char buf[1500];
       struct sockaddr_in clientAddr;
       socklen_t addrLen = sizeof(clientAddr);
@@ -365,6 +390,7 @@ int main(int argc, char *argv[]){
       else{
         perror("recv");
       }
+    }
   }
 }
 
