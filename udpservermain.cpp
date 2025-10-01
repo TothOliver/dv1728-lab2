@@ -103,8 +103,6 @@ int main(int argc, char *argv[]){
     return EXIT_FAILURE;
   }
 
-  results = reverseList(results);
-
   for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
     sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if(sockfd == -1){
@@ -119,6 +117,7 @@ int main(int argc, char *argv[]){
       sockfd = -1;
       continue;
     }
+    freeaddrinfo(results);
 
     if(bind(sockfd, p->ai_addr, p->ai_addrlen) == 0){
       bind_status = 0;
@@ -153,7 +152,7 @@ int main(int argc, char *argv[]){
     FD_ZERO(&reading);
     FD_SET(sockfd, &reading);
 
-    timeout.tv_sec = 10;
+    timeout.tv_sec = 1;
     timeout.tv_usec = 0;
     rc = select(sockfd+1, &reading, NULL, NULL, &timeout);
 
@@ -176,6 +175,8 @@ int main(int argc, char *argv[]){
     }
 
     if(FD_ISSET(sockfd, &reading)){
+      printf("hmmm\n");
+    }
       char buf[1500];
       struct sockaddr_in clientAddr;
       socklen_t addrLen = sizeof(clientAddr);
@@ -356,7 +357,6 @@ int main(int argc, char *argv[]){
       else{
         perror("recv");
       }
-    }
   }
 }
 
