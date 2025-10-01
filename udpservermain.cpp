@@ -166,7 +166,7 @@ int main(int argc, char *argv[]){
     }
 
     if(rc == 0){
-      printf("ohoh\n");
+      printf("Waiting for msg\n");
       continue;
     }
     else if(rc < 0){
@@ -230,9 +230,11 @@ int main(int argc, char *argv[]){
         cp.inValue2 = htonl(v2);
         cp.inResult = htonl(0);
 
-        if(sendMessage(sockfd, &cp, sizeof(cp), &clientAddr, addrLen) == -1){
-          return EXIT_FAILURE;
-        }
+        ssize_t sent = sendto(sockfd, &cp, sizeof(cp), 0, (struct sockaddr*)&clientAddr, addrLen);
+        if(sent == -1){
+          perror("sendto failed");
+          continue;
+        } 
         printf("sendMessage calcProtocol\n");
 
         ClientKey key;
@@ -285,8 +287,10 @@ int main(int argc, char *argv[]){
           printf("NOT OK\n");
         }
 
-        if(sendMessage(sockfd, &reply, sizeof(reply), &clientAddr, addrLen) == -1){
-          return EXIT_FAILURE;
+        ssize_t sent = sendto(sockfd, &reply, sizeof(reply), 0, (struct sockaddr*)&clientAddr, addrLen);
+        if(sent == -1){
+          perror("sendto failed");
+          return -1;
         }
       }
     
@@ -297,8 +301,10 @@ int main(int argc, char *argv[]){
           memset(&buf, 0, sizeof(buf));
           int result = generateTask(buf, sizeof(buf));
 
-          if(sendMessage(sockfd, &buf, strlen(buf), &clientAddr, addrLen) == -1){
-            return EXIT_FAILURE;
+          ssize_t sent = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr*)&clientAddr, addrLen);
+          if(sent == -1){
+            perror("sendto failed");
+            return -1;
           }
 
           ClientKey key;
@@ -348,8 +354,10 @@ int main(int argc, char *argv[]){
               strcpy(buf, "NOT OK\n");
             }
 
-            if(sendMessage(sockfd, &buf, strlen(buf), &clientAddr, addrLen) == -1){
-              return EXIT_FAILURE;
+            ssize_t sent = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr*)&clientAddr, addrLen);
+            if(sent == -1){
+              perror("sendto failed");
+              continue;
             }
           }
         }
