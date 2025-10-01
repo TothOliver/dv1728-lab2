@@ -152,9 +152,18 @@ int main(int argc, char *argv[]){
     FD_ZERO(&reading);
     FD_SET(sockfd, &reading);
 
-    timeout.tv_sec = 1;
+    timeout.tv_sec = 10;
     timeout.tv_usec = 0;
     rc = select(sockfd+1, &reading, NULL, NULL, &timeout);
+
+    auto now = Clock::now();
+    for(auto it = pending.begin(); it != pending.end();){
+        if(now > it->second.deadline){
+            it = pending.erase(it);
+        }else{
+            ++it;
+        }
+    }
 
     if(rc == 0){
       continue;
@@ -168,7 +177,16 @@ int main(int argc, char *argv[]){
       char buf[1500];
       struct sockaddr_in clientAddr;
       socklen_t addrLen = sizeof(clientAddr);
-      int byte_size = recvMessage(sockfd, buf, sizeof(buf), 5, &clientAddr, &addrLen);
+      //int byte_size = recvMessage(sockfd, buf, sizeof(buf), 5, &clientAddr, &addrLen);
+
+      ssize_t byte_size = recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr*)&clientAddr, &addrLen);
+      if(byte_size <= 0){
+        fprintf(stderr, "ERROR: read failed!\n");
+        return -1;
+      }
+
+      printf("Bite_size %zd\n", byte_size);
+
 
       if(isCalcMessage(buf, byte_size)){
         calcProtocol cp;
