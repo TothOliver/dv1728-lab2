@@ -93,7 +93,7 @@ int main(int argc, char *argv[]){
   int sockfd, bind_status;
 
   memset(&hints, 0, sizeof hints);
-  hints.ai_family = AF_INET;
+  hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_DGRAM;
 
   int status = getaddrinfo(hoststring, portstring, &hints, &results);
@@ -102,6 +102,8 @@ int main(int argc, char *argv[]){
     fprintf(stderr, "ERROR: RESOLVE ISSUE\n");
     return EXIT_FAILURE;
   }
+
+  reverseList(results);
 
   for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
     sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
@@ -129,7 +131,7 @@ int main(int argc, char *argv[]){
     }
   }
   freeaddrinfo(results);
-  
+
   if(sockfd == -1){
     fprintf(stderr, "ERROR: CANT CONNECT TO %d\n", sockfd);
     return EXIT_FAILURE;
