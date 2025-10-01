@@ -103,45 +103,46 @@ int main(int argc, char *argv[]){
     return EXIT_FAILURE;
   }
 
-  reverseList(results);
+  sockfd = -1;
+  bind_status = -1;
 
-  for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
-    sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-    if(sockfd == -1){
-      perror("socket");
-      continue;
-    }
+  for(int pass = 0; pass < 2 && sockfd == -1; ++pass){
+    for(struct addrinfo *p = results; p != NULL; p = p->ai_next){
+      if(pass == 0 && p->ai_family != AF_INET) 
+        continue;
+      if(pass == 1 && p->ai_family != AF_INET6) 
+        continue;
 
-    int yes = 1;
-    if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1){
-      perror("setsockopt");
-      close(sockfd);
-      sockfd = -1;
-      continue;
-    }
+      sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+      if(sockfd == -1){
+          perror("socket");
+          continue;
+      }
 
+      int yes = 1;
+      if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1){
+        perror("setsockopt");
+        close(sockfd);
+        sockfd = -1;
+        continue;
+      }
 
-    if(bind(sockfd, p->ai_addr, p->ai_addrlen) == 0){
-      bind_status = 0;
-      break;
-    }else{
-      perror("bind");
-      close(sockfd);
-      sockfd = -1;
+      if(bind(sockfd, p->ai_addr, p->ai_addrlen) == 0){
+        bind_status = 0;
+        break;
+      } 
+      else{
+        perror("bind");
+        close(sockfd);
+        sockfd = -1;
+      }
     }
   }
   freeaddrinfo(results);
 
-  if(sockfd == -1){
-    fprintf(stderr, "ERROR: CANT CONNECT TO %d\n", sockfd);
-    return EXIT_FAILURE;
-  }
-  if(bind_status == -1){
-    freeaddrinfo(results);
-    close(sockfd);
-    perror("bind");
-    fprintf(stderr, "ERROR: CANT BIND to %d\n", sockfd);
-    return EXIT_FAILURE;
+  if(sockfd == -1 || bind_status == -1){
+    fprintf(stderr, "ERROR: Could not bind to any address\n");
+    exit(EXIT_FAILURE);
   }
 
   fd_set reading;
