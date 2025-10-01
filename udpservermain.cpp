@@ -10,11 +10,13 @@
 #include <errno.h>
 #include <protocol.h>
 #include <ctime>
+#include <chrono>
 #include <string>
 
 // Included to get the support library
 #include <calcLib.h>
 #include <map>
+#include <unordered_map>
 
 // Enable if you want debugging to be printed, see examble below.
 // Alternative, pass CFLAGS=-DDEBUG to make, make CFLAGS=-DDEBUG
@@ -22,6 +24,8 @@
 
 
 using namespace std;
+using Clock = std::chrono::steady_clock;
+
 
 int sendMessage(int sockfd, const void* msg, size_t msgSize, struct sockaddr_in* clientAddr, socklen_t addrLen);
 int recvMessage(int sockfd, char* buf, size_t bufsize, int timeOutSec, struct sockaddr_in* clientAddr, socklen_t* addrLen);
@@ -30,6 +34,25 @@ struct addrinfo* reverseList(struct addrinfo* head);
 bool isCalcMessage(const char* buf, int byte_size);
 bool isCalcProtocol(const char* buf, int byte_size);
 
+struct ClientResult{
+  int result;
+  int id;
+  Clock::time_point deadline;     
+};
+
+struct ClientKey{
+  in_addr addr;
+  uint16_t port;
+  bool operator==(const ClientKey &other) const{
+    return addr.s_addr == other.addr.s_addr && port == other.port;
+  }
+};
+
+struct ClientKeyHash{
+  std::size_t operator()(const ClientKey &k) const{
+    return std::hash<uint32_t>()(k.addr.s_addr) ^ (std::hash<uint16_t>()(k.port) << 1);
+  }
+};
 
 int main(int argc, char *argv[]){
   if (argc < 2) {
@@ -123,7 +146,7 @@ int main(int argc, char *argv[]){
   struct timeval timeout;
   int rc;
 
-  std::map<std::string, int> pendingResults;
+  std::unordered_map<ClientKey, ClientResult, ClientKeyHash> pending;
 
   while(true){
     FD_ZERO(&reading);
@@ -190,13 +213,18 @@ int main(int argc, char *argv[]){
         }
         printf("sendMessage calcProtocol\n");
 
-        char ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &(clientAddr.sin_addr), ip, sizeof(ip));
-        uint16_t port = ntohs(clientAddr.sin_port);
+        ClientKey key;
+        key.addr = clientAddr.sin_addr;
+        key.port = ntohs(clientAddr.sin_port);
+        std::to_string(id);
 
-        std::string key = std::string(ip) + ":" + ::to_string(port) + ":" + std::to_string(id);
+        ClientResult cr;
+        cr.result = result;
+        cr.id = id;
+        cr.deadline = Clock::now() + std::chrono::seconds(10);
 
-        pendingResults[key] = result;
+        pending[key] = cr;
+
       }
       
       else if(isCalcProtocol(buf, byte_size)){
@@ -208,21 +236,23 @@ int main(int argc, char *argv[]){
         
         calcProtocol cp;
         memcpy(&cp, buf, sizeof(cp));
-        uint32_t id = ntohl(cp.id);
         int32_t inResult = ntohl(cp.inResult);
 
-        char ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &(clientAddr.sin_addr), ip, sizeof(ip));
-        uint16_t port = ntohs(clientAddr.sin_port);
-
         int result;
-        std::string key = std::string(ip) + ":" + std::to_string(port) + ":" + std::to_string(id);
-        if(pendingResults.find(key) != pendingResults.end()){
-          result = pendingResults[key];
-          pendingResults.erase(key); 
-        }else{
-          printf("No matching client adress\n");
-        } 
+        ClientKey key;
+        key.addr = clientAddr.sin_addr;
+        key.port = ntohs(clientAddr.sin_port);
+
+        auto it = pending.find(key);
+          if(it != pending.end()){
+            ClientResult &cr = it->second;
+            
+            if(Clock::now() > cr.deadline){
+              printf("TIMEOUT\n");
+              continue;
+            }
+            result = cr.result;
+          }
 
         if(inResult == result){
           reply.message = htonl(1);
@@ -248,13 +278,16 @@ int main(int argc, char *argv[]){
           if(sendMessage(sockfd, &buf, strlen(buf), &clientAddr, addrLen) == -1){
             return EXIT_FAILURE;
           }
-          
-          char ip[INET_ADDRSTRLEN];
-          inet_ntop(AF_INET, &(clientAddr.sin_addr), ip, sizeof(ip));
-          uint16_t port = ntohs(clientAddr.sin_port);
 
-          std::string key = std::string(ip) + ":" + std::to_string(port);
-          pendingResults[key] = result;
+          ClientKey key;
+          key.addr = clientAddr.sin_addr;
+          key.port = ntohs(clientAddr.sin_port);
+
+          ClientResult cr;
+          cr.result = result;
+          cr.deadline = Clock::now() + std::chrono::seconds(10);
+
+          pending[key] = cr;
 
         }
         else{
@@ -268,21 +301,22 @@ int main(int argc, char *argv[]){
           if(isNumber == true){
             int clientResult = atoi(buf);
             memset(&buf, 0, sizeof(buf));
-
-            char ip[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &(clientAddr.sin_addr), ip, sizeof(ip));
-            uint16_t port = ntohs(clientAddr.sin_port);
             int result;
-            
-            std::string key = std::string(ip) + ":" + std::to_string(port);
-            if(pendingResults.find(key) != pendingResults.end()){
-                result = pendingResults[key];
-                pendingResults.erase(key);
-            }
-            else{
-              printf("No matching client adress\n");
-            } 
 
+            ClientKey key;
+            key.addr = clientAddr.sin_addr;
+            key.port = ntohs(clientAddr.sin_port);
+
+            auto it = pending.find(key);
+            if(it != pending.end()){
+                ClientResult &cr = it->second;
+
+                if(Clock::now() > cr.deadline){
+                  printf("TIMEOUT\n");
+                  continue;
+                }
+                result = cr.result;
+            }
             if(clientResult == result){
               printf("OK\n");
               strcpy(buf, "OK\n");
